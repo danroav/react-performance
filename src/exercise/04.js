@@ -7,6 +7,8 @@ import * as React from 'react'
 import {useCombobox} from '../use-combobox'
 import {getItems} from '../workerized-filter-cities'
 import {useAsync, useForceRerender} from '../utils'
+import {useVirtual} from 'react-virtual'
+import {useRecoilBridgeAcrossReactRoots_UNSTABLE} from 'recoil'
 
 // 💰 I made this for you, you'll need it later:
 const getVirtualRowStyles = ({size, start}) => ({
@@ -24,13 +26,17 @@ function Menu({
   getItemProps,
   highlightedIndex,
   selectedItem,
+  listRef,
+  virtualRows,
+  totalHeight,
   // 🐨 accept listRef, virtualRows, totalHeight
 }) {
   return (
     // 🐨 pass the listRef to the `getMenuProps` prop getter function below:
     // 💰  getMenuProps({ref: listRef})
-    <ul {...getMenuProps()}>
+    <ul {...getMenuProps({ref: listRef})}>
       {/* 🐨 add a li here with an inline style for the height set to the totalHeight */}
+      <li style={{height: totalHeight}} />
       {/*
         🦉 this is to ensure that the scrollable area of the <ul /> is the
         same height it would be if we were actually rendering everything
@@ -43,21 +49,26 @@ function Menu({
         - size: set the "height" style to this value
         - start: this is how many pixels from the scrollTop this item should be
       */}
-      {items.map((item, index) => (
-        <ListItem
-          key={item.id}
-          getItemProps={getItemProps}
-          item={item}
-          index={index}
-          isSelected={selectedItem?.id === item.id}
-          isHighlighted={highlightedIndex === index}
-          // 🐨 pass a style prop, you can get the inline styles from getVirtualRowStyles()
-          // make sure to pass an object with the size (the height of the row)
-          // and start (where the row starts relative to the scrollTop of its container).
-        >
-          {item.name}
-        </ListItem>
-      ))}
+      {virtualRows.map(({index, size, start}) => {
+        const item = items[index]
+        if (!item) return null
+        return (
+          <ListItem
+            key={item.id}
+            getItemProps={getItemProps}
+            item={item}
+            index={index}
+            isSelected={selectedItem?.id === item.id}
+            isHighlighted={highlightedIndex === index}
+            style={{...getVirtualRowStyles({size, start})}}
+            // 🐨 pass a style prop, you can get the inline styles from getVirtualRowStyles()
+            // make sure to pass an object with the size (the height of the row)
+            // and start (where the row starts relative to the scrollTop of its container).
+          >
+            {item.name}
+          </ListItem>
+        )
+      })}
     </ul>
   )
 }
@@ -68,6 +79,7 @@ function ListItem({
   index,
   isHighlighted,
   isSelected,
+  style,
   // 🐨 accept the style prop
   ...props
 }) {
@@ -79,6 +91,7 @@ function ListItem({
         style: {
           backgroundColor: isHighlighted ? 'lightgray' : 'inherit',
           fontWeight: isSelected ? 'bold' : 'normal',
+          ...style,
           // 🐨 spread the incoming styles onto this inline style object
         },
         ...props,
@@ -95,12 +108,11 @@ function App() {
   React.useEffect(() => {
     run(getItems(inputValue))
   }, [inputValue, run])
-
   // 🐨 create a listRef with React.useRef
   // which will be used for the parentRef option you pass to useVirtual
   // and should be applied to the <ul /> for our menu. This is how react-virtual
   // knows how to scroll our items as the user scrolls.
-
+  const listRef = React.useRef()
   // 🐨 call useVirtual with the following configuration options:
   // - size (the number of items)
   // - parentRef (the listRef you created above)
@@ -109,6 +121,12 @@ function App() {
   // - overscan (the number of additional rows to render outside the scrollable view)
   //   💰 You can play around with that number, but you probably don't need more than 10.
   // 🐨 you can set the return value of your useVirtual call to `rowVirtualizer`
+  const rowVirtualizer = useVirtual({
+    size: items.length,
+    parentRef: listRef,
+    estimateSize: React.useCallback(() => 20, []),
+    overscan: 10,
+  })
 
   const {
     selectedItem,
@@ -130,6 +148,9 @@ function App() {
           : 'Selection Cleared',
       ),
     itemToString: item => (item ? item.name : ''),
+    scrollIntoView: () => {},
+    onHighlightedIndexChange: ({highlightedIndex}) =>
+      highlightedIndex !== -1 && rowVirtualizer.scrollToIndex(highlightedIndex),
     // we want to override Downshift's scrollIntoView functionality because
     // react-virtual will handle scrolling for us:
     // 🐨 set scrollIntoView to a "no-op" function
@@ -156,6 +177,9 @@ function App() {
           getItemProps={getItemProps}
           highlightedIndex={highlightedIndex}
           selectedItem={selectedItem}
+          listRef={listRef}
+          virtualRows={rowVirtualizer.virtualItems}
+          totalHeight={rowVirtualizer.totalSize}
           // 🐨 pass the following props:
           // listRef: listRef
           // virtualRows: rowVirtualizer.virtualItems

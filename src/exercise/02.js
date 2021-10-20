@@ -3,7 +3,8 @@
 
 import * as React from 'react'
 import {useCombobox} from '../use-combobox'
-import {getItems} from '../filter-cities'
+//import {getItems} from '../filter-cities'
+import {getItems} from '../workerized-filter-cities'
 import {useForceRerender} from '../utils'
 
 function Menu({
@@ -61,7 +62,7 @@ function App() {
   const [inputValue, setInputValue] = React.useState('')
 
   // 🐨 wrap getItems in a call to `React.useMemo`
-  const allItems = getItems(inputValue)
+  const allItems = React.useMemo(() => getItems(inputValue), [inputValue])
   const items = allItems.slice(0, 100)
 
   const {
